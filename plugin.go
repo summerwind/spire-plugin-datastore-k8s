@@ -5,6 +5,7 @@ import (
 
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/spire/pkg/common/bundleutil"
+	"github.com/spiffe/spire/proto/spire/common"
 	spi "github.com/spiffe/spire/proto/spire/common/plugin"
 	"github.com/spiffe/spire/proto/spire/server/datastore"
 	"github.com/summerwind/spire-plugin-datastore-kubernetes/pkg/apis"
@@ -279,9 +280,52 @@ func (p *Plugin) FetchAttestedNode(ctx context.Context, req *datastore.FetchAtte
 	}, nil
 }
 
-func (p *Plugin) ListAttestedNodes(context.Context, *datastore.ListAttestedNodesRequest) (*datastore.ListAttestedNodesResponse, error) {
-	// TODO
-	return &datastore.ListAttestedNodesResponse{}, nil
+func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttestedNodesRequest) (*datastore.ListAttestedNodesResponse, error) {
+	pager := req.Pagination
+
+	nodeList := v1alpha1.AttestedNodeList{}
+	err := p.List(ctx, &nodeList, client.InNamespace(p.config.Namespace))
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := []v1alpha1.AttestedNode{}
+	start := 0
+	for _, node := range nodeList.Items {
+		if req.ByExpiresBefore != nil && node.Spec.CertNotAfter >= req.ByExpiresBefore.Value {
+			continue
+		}
+
+		filtered = append(filtered, node)
+		if pager != nil && pager.Token == node.Name {
+			start = len(filtered)
+		}
+	}
+
+	last := start + int(pager.PageSize)
+	if last > len(filtered) {
+		last = len(filtered)
+	}
+
+	nodes := filtered[start:last]
+	if pager != nil && pager.PageSize > 0 {
+		pager.Token = nodes[len(nodes)-1].Name
+	}
+
+	res := datastore.ListAttestedNodesResponse{
+		Nodes:      make([]*common.AttestedNode, 0, len(nodes)),
+		Pagination: pager,
+	}
+
+	for _, n := range nodes {
+		node, err := n.Proto()
+		if err != nil {
+			return nil, err
+		}
+		res.Nodes = append(res.Nodes, node)
+	}
+
+	return &res, nil
 }
 
 func (p *Plugin) UpdateAttestedNode(ctx context.Context, req *datastore.UpdateAttestedNodeRequest) (*datastore.UpdateAttestedNodeResponse, error) {
