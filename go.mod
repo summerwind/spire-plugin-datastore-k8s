@@ -11,6 +11,7 @@ require (
 	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/hashicorp/go-plugin v0.0.0-20190220160451-3f118e8ee104
 	github.com/hashicorp/hcl v1.0.0
+	github.com/oklog/ulid v1.3.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/spiffe/spire v0.0.0-20190418221313-cde94b8652fc
 	golang.org/x/oauth2 v0.0.0-20190402181905-9f3314589c9a // indirect

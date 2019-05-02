@@ -1,9 +1,6 @@
 package v1alpha1
 
 import (
-	"crypto/sha256"
-	"fmt"
-
 	"github.com/spiffe/spire/proto/spire/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -23,14 +20,13 @@ func NewAttestedNode(node *common.AttestedNode) *AttestedNode {
 
 	return &AttestedNode{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: GetAttestedNodeName(an.SpiffeID),
+			Name: NewName(),
+			Labels: map[string]string{
+				LabelSpiffeID: EncodeID(node.SpiffeId),
+			},
 		},
 		Spec: *an,
 	}
-}
-
-func GetAttestedNodeName(spiffeID string) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(spiffeID)))
 }
 
 func (an *AttestedNode) Proto() (*common.AttestedNode, error) {

@@ -1,6 +1,37 @@
 package v1alpha1
 
-import "github.com/spiffe/spire/proto/spire/common"
+import (
+	"crypto/sha256"
+	"fmt"
+	"math/rand"
+	"strings"
+	"time"
+
+	"github.com/oklog/ulid"
+	"github.com/spiffe/spire/proto/spire/common"
+)
+
+const (
+	LabelSpiffeID = "spire.summerwind.dev/spiffe-id"
+)
+
+var (
+	entropy *rand.Rand
+)
+
+func init() {
+	t := time.Now()
+	entropy = rand.New(rand.NewSource(t.UnixNano()))
+}
+
+func NewName() string {
+	id := ulid.MustNew(ulid.Now(), entropy)
+	return strings.ToLower(id.String())
+}
+
+func EncodeID(id string) string {
+	return fmt.Sprintf("%x", sha256.Sum224([]byte(id)))
+}
 
 type Selector struct {
 	Type  string `json:"type"`

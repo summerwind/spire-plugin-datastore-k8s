@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/spire/pkg/common/bundleutil"
@@ -16,6 +17,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+)
+
+var (
+	ErrNotFound = errors.New("resource not found")
 )
 
 type Plugin struct {
@@ -204,6 +209,9 @@ func (p *Plugin) FetchBundle(ctx context.Context, req *datastore.FetchBundleRequ
 
 	err := p.Get(ctx, nn, &instance)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return &datastore.FetchBundleResponse{}, nil
+		}
 		return nil, err
 	}
 
@@ -256,15 +264,9 @@ func (p *Plugin) CreateAttestedNode(ctx context.Context, req *datastore.CreateAt
 }
 
 func (p *Plugin) FetchAttestedNode(ctx context.Context, req *datastore.FetchAttestedNodeRequest) (*datastore.FetchAttestedNodeResponse, error) {
-	nn := types.NamespacedName{
-		Name:      v1alpha1.GetAttestedNodeName(req.SpiffeId),
-		Namespace: p.config.Namespace,
-	}
-	instance := v1alpha1.AttestedNode{}
-
-	err := p.Get(ctx, nn, &instance)
+	instance, err := p.getAttestedNode(ctx, req.SpiffeId)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
+		if err == ErrNotFound {
 			return &datastore.FetchAttestedNodeResponse{}, nil
 		}
 		return nil, err
@@ -287,6 +289,10 @@ func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttes
 	err := p.List(ctx, &nodeList, client.InNamespace(p.config.Namespace))
 	if err != nil {
 		return nil, err
+	}
+
+	if len(nodeList.Items) == 0 {
+		return &datastore.ListAttestedNodesResponse{}, nil
 	}
 
 	filtered := []v1alpha1.AttestedNode{}
@@ -329,13 +335,7 @@ func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttes
 }
 
 func (p *Plugin) UpdateAttestedNode(ctx context.Context, req *datastore.UpdateAttestedNodeRequest) (*datastore.UpdateAttestedNodeResponse, error) {
-	nn := types.NamespacedName{
-		Name:      v1alpha1.GetAttestedNodeName(req.SpiffeId),
-		Namespace: p.config.Namespace,
-	}
-	instance := v1alpha1.AttestedNode{}
-
-	err := p.Get(ctx, nn, &instance)
+	instance, err := p.getAttestedNode(ctx, req.SpiffeId)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +343,7 @@ func (p *Plugin) UpdateAttestedNode(ctx context.Context, req *datastore.UpdateAt
 	instance.Spec.CertSerialNumber = req.CertSerialNumber
 	instance.Spec.CertNotAfter = req.CertNotAfter
 
-	err = p.Update(ctx, &instance)
+	err = p.Update(ctx, instance)
 	if err != nil {
 		return nil, err
 	}
@@ -359,18 +359,12 @@ func (p *Plugin) UpdateAttestedNode(ctx context.Context, req *datastore.UpdateAt
 }
 
 func (p *Plugin) DeleteAttestedNode(ctx context.Context, req *datastore.DeleteAttestedNodeRequest) (*datastore.DeleteAttestedNodeResponse, error) {
-	nn := types.NamespacedName{
-		Name:      v1alpha1.GetAttestedNodeName(req.SpiffeId),
-		Namespace: p.config.Namespace,
-	}
-	instance := v1alpha1.AttestedNode{}
-
-	err := p.Get(ctx, nn, &instance)
+	instance, err := p.getAttestedNode(ctx, req.SpiffeId)
 	if err != nil {
 		return nil, err
 	}
 
-	err = p.Delete(ctx, &instance)
+	err = p.Delete(ctx, instance)
 	if err != nil {
 		return nil, err
 	}
@@ -383,6 +377,24 @@ func (p *Plugin) DeleteAttestedNode(ctx context.Context, req *datastore.DeleteAt
 	return &datastore.DeleteAttestedNodeResponse{
 		Node: node,
 	}, nil
+}
+
+func (p *Plugin) getAttestedNode(ctx context.Context, spiffeID string) (*v1alpha1.AttestedNode, error) {
+	nodeList := v1alpha1.AttestedNodeList{}
+	labels := map[string]string{
+		v1alpha1.LabelSpiffeID: v1alpha1.EncodeID(spiffeID),
+	}
+
+	err := p.List(ctx, &nodeList, client.InNamespace(p.config.Namespace), client.MatchingLabels(labels))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(nodeList.Items) == 0 {
+		return nil, ErrNotFound
+	}
+
+	return &(nodeList.Items[0]), nil
 }
 
 func (p *Plugin) SetNodeSelectors(ctx context.Context, req *datastore.SetNodeSelectorsRequest) (*datastore.SetNodeSelectorsResponse, error) {
