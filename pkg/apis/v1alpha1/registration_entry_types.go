@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	uuid "github.com/satori/go.uuid"
 	"github.com/spiffe/spire/proto/spire/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -20,20 +19,19 @@ func NewRegistrationEntry(entry *common.RegistrationEntry) *RegistrationEntry {
 	re := NewRegistrationEntrySpec(entry)
 
 	if re.EntryID == "" {
-		re.EntryID = NewEntryID()
+		re.EntryID = NewName()
 	}
 
 	return &RegistrationEntry{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: re.EntryID,
+			Labels: map[string]string{
+				LabelSpiffeID: EncodeID(re.SpiffeID),
+				LabelParentID: EncodeID(re.ParentID),
+			},
 		},
 		Spec: *re,
 	}
-}
-
-func NewEntryID() string {
-	id := uuid.NewV4()
-	return id.String()
 }
 
 func (re *RegistrationEntry) Proto() (*common.RegistrationEntry, error) {

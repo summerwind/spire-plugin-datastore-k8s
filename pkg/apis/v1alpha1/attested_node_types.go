@@ -22,7 +22,7 @@ func NewAttestedNode(node *common.AttestedNode) *AttestedNode {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: NewName(),
 			Labels: map[string]string{
-				LabelSpiffeID: EncodeID(node.SpiffeId),
+				LabelSpiffeID: EncodeID(an.SpiffeID),
 			},
 		},
 		Spec: *an,

@@ -13,6 +13,7 @@ import (
 
 const (
 	LabelSpiffeID = "spire.summerwind.dev/spiffe-id"
+	LabelParentID = "spire.summerwind.dev/parent-id"
 )
 
 var (
