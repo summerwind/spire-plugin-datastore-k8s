@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -21,6 +22,8 @@ import (
 
 var (
 	ErrNotFound = errors.New("resource not found")
+
+	kubeConfig *rest.Config
 )
 
 type Plugin struct {
@@ -33,8 +36,10 @@ func New() *Plugin {
 }
 
 func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi.ConfigureResponse, error) {
+	var err error
+
 	c := PluginConfig{}
-	err := hcl.Decode(&c, req.Configuration)
+	err = hcl.Decode(&c, req.Configuration)
 	if err != nil {
 		return nil, err
 	}
@@ -44,29 +49,32 @@ func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi
 		return nil, err
 	}
 
-	kc, err := config.GetConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	sc := scheme.Scheme
-	err = apis.AddToScheme(sc)
-	if err != nil {
-		return nil, err
-	}
-
-	mapper, err := apiutil.NewDiscoveryRESTMapper(kc)
-	if err != nil {
-		return nil, err
-	}
-
-	kclient, err := client.New(kc, client.Options{Scheme: sc, Mapper: mapper})
-	if err != nil {
-		return nil, err
-	}
-
 	p.config = &c
-	p.Client = kclient
+
+	if kubeConfig == nil {
+		kubeConfig, err = config.GetConfig()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	s := scheme.Scheme
+	err = apis.AddToScheme(s)
+	if err != nil {
+		return nil, err
+	}
+
+	mapper, err := apiutil.NewDiscoveryRESTMapper(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeClient, err := client.New(kubeConfig, client.Options{Scheme: s, Mapper: mapper})
+	if err != nil {
+		return nil, err
+	}
+
+	p.Client = kubeClient
 
 	return &spi.ConfigureResponse{}, nil
 }
@@ -295,6 +303,23 @@ func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttes
 		return &datastore.ListAttestedNodesResponse{}, nil
 	}
 
+	if pager == nil || pager.PageSize == 0 {
+		res := datastore.ListAttestedNodesResponse{
+			Nodes:      make([]*common.AttestedNode, 0, len(nodeList.Items)),
+			Pagination: pager,
+		}
+
+		for _, n := range nodeList.Items {
+			node, err := n.Proto()
+			if err != nil {
+				return nil, err
+			}
+			res.Nodes = append(res.Nodes, node)
+		}
+
+		return &res, nil
+	}
+
 	filtered := []v1alpha1.AttestedNode{}
 	start := 0
 	for _, node := range nodeList.Items {
@@ -308,14 +333,19 @@ func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttes
 		}
 	}
 
+	if (pager != nil && pager.Token != "") && start == 0 {
+		return nil, errors.New("invalid token")
+	}
+
 	last := start + int(pager.PageSize)
 	if last > len(filtered) {
 		last = len(filtered)
 	}
 
 	nodes := filtered[start:last]
-	if pager != nil && pager.PageSize > 0 {
-		pager.Token = nodes[len(nodes)-1].Name
+	if len(nodes) != 0 {
+		length := len(nodes)
+		pager.Token = nodes[length-1].Name
 	}
 
 	res := datastore.ListAttestedNodesResponse{
