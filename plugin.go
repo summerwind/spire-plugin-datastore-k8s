@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/spire/pkg/common/bundleutil"
+	"github.com/spiffe/spire/pkg/common/selector"
 	"github.com/spiffe/spire/proto/spire/common"
 	spi "github.com/spiffe/spire/proto/spire/common/plugin"
 	"github.com/spiffe/spire/proto/spire/server/datastore"
@@ -535,9 +537,118 @@ func (p *Plugin) FetchRegistrationEntry(ctx context.Context, req *datastore.Fetc
 	}, nil
 }
 
-func (p *Plugin) ListRegistrationEntries(context.Context, *datastore.ListRegistrationEntriesRequest) (*datastore.ListRegistrationEntriesResponse, error) {
-	// TODO
-	return &datastore.ListRegistrationEntriesResponse{}, nil
+func (p *Plugin) ListRegistrationEntries(ctx context.Context, req *datastore.ListRegistrationEntriesRequest) (*datastore.ListRegistrationEntriesResponse, error) {
+	labels := map[string]string{}
+	if req.ByParentId != nil {
+		labels[v1alpha1.LabelParentID] = v1alpha1.EncodeID(req.ByParentId.Value)
+	}
+	if req.BySpiffeId != nil {
+		labels[v1alpha1.LabelSpiffeID] = v1alpha1.EncodeID(req.BySpiffeId.Value)
+	}
+
+	entryList := v1alpha1.RegistrationEntryList{}
+	err := p.List(ctx, &entryList, client.InNamespace(p.config.Namespace), client.MatchingLabels(labels))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(entryList.Items) == 0 {
+		return &datastore.ListRegistrationEntriesResponse{}, nil
+	}
+
+	res := &datastore.ListRegistrationEntriesResponse{
+		Entries:    make([]*common.RegistrationEntry, 0, len(entryList.Items)),
+		Pagination: req.Pagination,
+	}
+
+	if req.BySelectors == nil || len(req.BySelectors.Selectors) == 0 {
+		for _, re := range entryList.Items {
+			entry, err := re.Proto()
+			if err != nil {
+				return nil, err
+			}
+			res.Entries = append(res.Entries, entry)
+		}
+	} else {
+		// Generate selector index.
+		selectorIndex := map[string]map[string]bool{}
+		for _, re := range entryList.Items {
+			selectorIndex[re.Name] = map[string]bool{}
+			for _, selector := range re.Spec.Selectors {
+				key := fmt.Sprintf("%s/%s", selector.Type, selector.Value)
+				selectorIndex[re.Name][key] = true
+			}
+		}
+
+		// Generate selectors list based on request.
+		var selectorsList [][]*common.Selector
+		selectorSet := selector.NewSetFromRaw(req.BySelectors.Selectors)
+		switch req.BySelectors.Match {
+		case datastore.BySelectors_MATCH_SUBSET:
+			for combination := range selectorSet.Power() {
+				selectorsList = append(selectorsList, combination.Raw())
+			}
+		case datastore.BySelectors_MATCH_EXACT:
+			selectorsList = append(selectorsList, selectorSet.Raw())
+		default:
+			return nil, fmt.Errorf("unhandled match behavior %q", req.BySelectors.Match)
+		}
+
+		// Extract entry by using selector list and selector index.
+		for _, re := range entryList.Items {
+			for _, selectors := range selectorsList {
+				if len(re.Spec.Selectors) != len(selectors) {
+					continue
+				}
+
+				matched := true
+				for _, selector := range selectors {
+					key := fmt.Sprintf("%s/%s", selector.Type, selector.Value)
+					_, ok := selectorIndex[re.Name][key]
+					if !ok {
+						matched = false
+						break
+					}
+				}
+
+				if matched {
+					entry, err := re.Proto()
+					if err != nil {
+						return nil, err
+					}
+					res.Entries = append(res.Entries, entry)
+				}
+			}
+		}
+	}
+
+	page := req.Pagination
+	if page == nil || page.PageSize == 0 {
+		return res, nil
+	}
+
+	start := 0
+	for i, entry := range res.Entries {
+		if page.Token == entry.EntryId {
+			start = i + 1
+		}
+	}
+
+	if page.Token != "" && start == 0 {
+		return nil, errors.New("invalid token")
+	}
+
+	last := start + int(page.PageSize)
+	if last > len(res.Entries) {
+		last = len(res.Entries)
+	}
+
+	res.Entries = res.Entries[start:last]
+	if len(res.Entries) != 0 {
+		res.Pagination.Token = res.Entries[len(res.Entries)-1].EntryId
+	}
+
+	return res, nil
 }
 
 func (p *Plugin) UpdateRegistrationEntry(ctx context.Context, req *datastore.UpdateRegistrationEntryRequest) (*datastore.UpdateRegistrationEntryResponse, error) {
