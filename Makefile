@@ -1,6 +1,7 @@
 build:
 	go build .
 
+.PHONY: test
 test:
 	go vet ./...
 	go test -v ./...
