@@ -218,7 +218,7 @@ func (s *PluginSuite) TestFetchAttestedNodesWithPagination() {
 			},
 		},
 		{
-			name: "get_nodes_by_expire_before_get_only_page_third_page_no_resultds",
+			name: "get_nodes_by_expire_before_get_only_page_third_page_no_results",
 			pagination: &datastore.Pagination{
 				PageSize: 2,
 			},
