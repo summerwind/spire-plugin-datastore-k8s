@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/hashicorp/hcl"
@@ -301,7 +302,7 @@ func (p *Plugin) FetchAttestedNode(ctx context.Context, req *datastore.FetchAtte
 }
 
 func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttestedNodesRequest) (*datastore.ListAttestedNodesResponse, error) {
-	pager := req.Pagination
+	page := req.Pagination
 
 	nodeList := v1alpha1.AttestedNodeList{}
 	err := p.List(ctx, &nodeList, client.InNamespace(p.config.Namespace))
@@ -313,54 +314,42 @@ func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttes
 		return &datastore.ListAttestedNodesResponse{}, nil
 	}
 
-	if pager == nil || pager.PageSize == 0 {
-		res := datastore.ListAttestedNodesResponse{
-			Nodes:      make([]*common.AttestedNode, 0, len(nodeList.Items)),
-			Pagination: pager,
-		}
-
-		for _, n := range nodeList.Items {
-			node, err := n.Proto()
-			if err != nil {
-				return nil, err
-			}
-			res.Nodes = append(res.Nodes, node)
-		}
-
-		return &res, nil
-	}
-
-	filtered := []v1alpha1.AttestedNode{}
+	nodes := []v1alpha1.AttestedNode{}
 	start := 0
+
 	for _, node := range nodeList.Items {
 		if req.ByExpiresBefore != nil && node.Spec.CertNotAfter >= req.ByExpiresBefore.Value {
 			continue
 		}
 
-		filtered = append(filtered, node)
-		if pager != nil && pager.Token == node.Name {
-			start = len(filtered)
+		nodes = append(nodes, node)
+		if page != nil && page.Token == node.Name {
+			start = len(nodes)
 		}
 	}
 
-	if (pager != nil && pager.Token != "") && start == 0 {
-		return nil, errors.New("invalid token")
-	}
+	log.Printf("Start: %d, Nodes: %v", start, nodes)
+	if page != nil && page.PageSize > 0 {
+		if page.Token != "" && start == 0 {
+			return nil, errors.New("invalid token")
+		}
 
-	last := start + int(pager.PageSize)
-	if last > len(filtered) {
-		last = len(filtered)
-	}
+		last := start + int(page.PageSize)
+		if last > len(nodes) {
+			last = len(nodes)
+		}
 
-	nodes := filtered[start:last]
-	if len(nodes) != 0 {
-		length := len(nodes)
-		pager.Token = nodes[length-1].Name
+		nodes = nodes[start:last]
+		if len(nodes) != 0 {
+			length := len(nodes)
+			page.Token = nodes[length-1].Name
+		}
 	}
+	log.Printf("Nodes: %v", nodes)
 
 	res := datastore.ListAttestedNodesResponse{
 		Nodes:      make([]*common.AttestedNode, 0, len(nodes)),
-		Pagination: pager,
+		Pagination: page,
 	}
 
 	for _, n := range nodes {
