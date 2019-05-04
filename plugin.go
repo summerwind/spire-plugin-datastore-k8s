@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/spire/pkg/common/bundleutil"
@@ -54,6 +55,13 @@ func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi
 	p.config = &c
 
 	if kubeConfig == nil {
+		if c.KubeConfig != "" && os.Getenv("KUBECONFIG") == "" {
+			err = os.Setenv("KUBECONFIG", c.KubeConfig)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		kubeConfig, err = config.GetConfig()
 		if err != nil {
 			return nil, err
