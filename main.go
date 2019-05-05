@@ -9,7 +9,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
-const pluginName = "kubernetes"
+const pluginName = "k8s"
 
 func main() {
 	catalog.PluginMain(
