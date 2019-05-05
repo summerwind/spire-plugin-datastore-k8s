@@ -1,9 +1,7 @@
 package v1alpha1
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 
 	"github.com/spiffe/spire/proto/spire/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,14 +22,10 @@ func NewBundle(bundle *common.Bundle) *Bundle {
 
 	return &Bundle{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: GetBundleName(bs.TrustDomainID),
+			Name: EncodeID(bs.TrustDomainID),
 		},
 		Spec: *bs,
 	}
-}
-
-func GetBundleName(trustDomainID string) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(trustDomainID)))
 }
 
 func (b *Bundle) Proto() (*common.Bundle, error) {

@@ -114,7 +114,7 @@ func (p *Plugin) CreateBundle(ctx context.Context, req *datastore.CreateBundleRe
 
 func (p *Plugin) UpdateBundle(ctx context.Context, req *datastore.UpdateBundleRequest) (*datastore.UpdateBundleResponse, error) {
 	nn := types.NamespacedName{
-		Name:      v1alpha1.GetBundleName(req.Bundle.TrustDomainId),
+		Name:      v1alpha1.EncodeID(req.Bundle.TrustDomainId),
 		Namespace: p.config.Namespace,
 	}
 	instance := v1alpha1.Bundle{}
@@ -139,7 +139,7 @@ func (p *Plugin) UpdateBundle(ctx context.Context, req *datastore.UpdateBundleRe
 
 func (p *Plugin) AppendBundle(ctx context.Context, req *datastore.AppendBundleRequest) (*datastore.AppendBundleResponse, error) {
 	nn := types.NamespacedName{
-		Name:      v1alpha1.GetBundleName(req.Bundle.TrustDomainId),
+		Name:      v1alpha1.EncodeID(req.Bundle.TrustDomainId),
 		Namespace: p.config.Namespace,
 	}
 	instance := v1alpha1.Bundle{}
@@ -191,7 +191,7 @@ func (p *Plugin) AppendBundle(ctx context.Context, req *datastore.AppendBundleRe
 
 func (p *Plugin) DeleteBundle(ctx context.Context, req *datastore.DeleteBundleRequest) (*datastore.DeleteBundleResponse, error) {
 	nn := types.NamespacedName{
-		Name:      v1alpha1.GetBundleName(req.TrustDomainId),
+		Name:      v1alpha1.EncodeID(req.TrustDomainId),
 		Namespace: p.config.Namespace,
 	}
 	instance := v1alpha1.Bundle{}
@@ -241,7 +241,7 @@ func (p *Plugin) DeleteBundle(ctx context.Context, req *datastore.DeleteBundleRe
 
 func (p *Plugin) FetchBundle(ctx context.Context, req *datastore.FetchBundleRequest) (*datastore.FetchBundleResponse, error) {
 	nn := types.NamespacedName{
-		Name:      v1alpha1.GetBundleName(req.TrustDomainId),
+		Name:      v1alpha1.EncodeID(req.TrustDomainId),
 		Namespace: p.config.Namespace,
 	}
 	instance := v1alpha1.Bundle{}
@@ -446,7 +446,7 @@ func (p *Plugin) getAttestedNode(ctx context.Context, spiffeID string) (*v1alpha
 
 func (p *Plugin) SetNodeSelectors(ctx context.Context, req *datastore.SetNodeSelectorsRequest) (*datastore.SetNodeSelectorsResponse, error) {
 	nn := types.NamespacedName{
-		Name:      v1alpha1.GetNodeSelectorsName(req.Selectors.SpiffeId),
+		Name:      v1alpha1.EncodeID(req.Selectors.SpiffeId),
 		Namespace: p.config.Namespace,
 	}
 	instance := v1alpha1.NodeSelectors{}
@@ -481,7 +481,7 @@ func (p *Plugin) SetNodeSelectors(ctx context.Context, req *datastore.SetNodeSel
 
 func (p *Plugin) GetNodeSelectors(ctx context.Context, req *datastore.GetNodeSelectorsRequest) (*datastore.GetNodeSelectorsResponse, error) {
 	nn := types.NamespacedName{
-		Name:      v1alpha1.GetNodeSelectorsName(req.SpiffeId),
+		Name:      v1alpha1.EncodeID(req.SpiffeId),
 		Namespace: p.config.Namespace,
 	}
 	instance := v1alpha1.NodeSelectors{}
@@ -758,7 +758,7 @@ func (p *Plugin) CreateJoinToken(ctx context.Context, req *datastore.CreateJoinT
 
 func (p *Plugin) FetchJoinToken(ctx context.Context, req *datastore.FetchJoinTokenRequest) (*datastore.FetchJoinTokenResponse, error) {
 	nn := types.NamespacedName{
-		Name:      v1alpha1.GetJoinTokenName(req.Token),
+		Name:      v1alpha1.EncodeID(req.Token),
 		Namespace: p.config.Namespace,
 	}
 	instance := v1alpha1.JoinToken{}
@@ -780,7 +780,7 @@ func (p *Plugin) FetchJoinToken(ctx context.Context, req *datastore.FetchJoinTok
 
 func (p *Plugin) DeleteJoinToken(ctx context.Context, req *datastore.DeleteJoinTokenRequest) (*datastore.DeleteJoinTokenResponse, error) {
 	nn := types.NamespacedName{
-		Name:      v1alpha1.GetJoinTokenName(req.Token),
+		Name:      v1alpha1.EncodeID(req.Token),
 		Namespace: p.config.Namespace,
 	}
 	instance := v1alpha1.JoinToken{}

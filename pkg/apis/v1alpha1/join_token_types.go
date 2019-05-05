@@ -1,9 +1,6 @@
 package v1alpha1
 
 import (
-	"crypto/sha256"
-	"fmt"
-
 	"github.com/spiffe/spire/proto/spire/server/datastore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -23,14 +20,10 @@ func NewJoinToken(token *datastore.JoinToken) *JoinToken {
 
 	return &JoinToken{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: GetJoinTokenName(jt.Token),
+			Name: EncodeID(jt.Token),
 		},
 		Spec: *jt,
 	}
-}
-
-func GetJoinTokenName(token string) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
 }
 
 func (jt *JoinToken) Proto() (*datastore.JoinToken, error) {

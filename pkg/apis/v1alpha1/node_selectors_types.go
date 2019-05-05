@@ -1,9 +1,6 @@
 package v1alpha1
 
 import (
-	"crypto/sha256"
-	"fmt"
-
 	"github.com/spiffe/spire/proto/spire/server/datastore"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -23,14 +20,10 @@ func NewNodeSelectors(selectors *datastore.NodeSelectors) *NodeSelectors {
 
 	return &NodeSelectors{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: GetNodeSelectorsName(ns.SpiffeID),
+			Name: EncodeID(ns.SpiffeID),
 		},
 		Spec: *ns,
 	}
-}
-
-func GetNodeSelectorsName(spiffeID string) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(spiffeID)))
 }
 
 func (ns *NodeSelectors) Proto() (*datastore.NodeSelectors, error) {
