@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	LabelSpiffeID = "spire.summerwind.dev/spiffe-id"
-	LabelParentID = "spire.summerwind.dev/parent-id"
+	LabelSpiffeID         = "spire.summerwind.dev/spiffe-id"
+	LabelParentID         = "spire.summerwind.dev/parent-id"
+	LabelPrefixFederation = "federation.spire.summerwind.dev"
 )
 
 var (

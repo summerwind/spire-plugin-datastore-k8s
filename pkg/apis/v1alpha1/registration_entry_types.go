@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"fmt"
+
 	"github.com/spiffe/spire/proto/spire/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -22,16 +24,26 @@ func NewRegistrationEntry(entry *common.RegistrationEntry) *RegistrationEntry {
 		re.EntryID = NewName()
 	}
 
+	labels := GetFederationLabels(re.FederatesWith)
+	labels[LabelSpiffeID] = EncodeID(re.SpiffeID)
+	labels[LabelParentID] = EncodeID(re.ParentID)
+
 	return &RegistrationEntry{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: re.EntryID,
-			Labels: map[string]string{
-				LabelSpiffeID: EncodeID(re.SpiffeID),
-				LabelParentID: EncodeID(re.ParentID),
-			},
+			Name:   re.EntryID,
+			Labels: labels,
 		},
 		Spec: *re,
 	}
+}
+
+func GetFederationLabels(domains []string) map[string]string {
+	labels := map[string]string{}
+	for _, domain := range domains {
+		key := fmt.Sprintf("%s/%s", LabelPrefixFederation, EncodeID(domain))
+		labels[key] = "yes"
+	}
+	return labels
 }
 
 func (re *RegistrationEntry) Proto() (*common.RegistrationEntry, error) {
