@@ -12,8 +12,6 @@ import (
 	"github.com/spiffe/spire/proto/spire/common"
 	spi "github.com/spiffe/spire/proto/spire/common/plugin"
 	"github.com/spiffe/spire/proto/spire/server/datastore"
-	"github.com/summerwind/spire-plugin-datastore-kubernetes/pkg/apis"
-	"github.com/summerwind/spire-plugin-datastore-kubernetes/pkg/apis/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -21,6 +19,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	"github.com/summerwind/spire-plugin-datastore-k8s/pkg/apis"
+	"github.com/summerwind/spire-plugin-datastore-k8s/pkg/apis/v1alpha1"
 )
 
 var (

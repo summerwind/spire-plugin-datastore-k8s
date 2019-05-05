@@ -1,4 +1,4 @@
-module github.com/summerwind/spire-plugin-datastore-kubernetes
+module github.com/summerwind/spire-plugin-datastore-k8s
 
 go 1.12
 

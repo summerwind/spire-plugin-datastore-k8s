@@ -21,10 +21,11 @@ import (
 	"github.com/spiffe/spire/proto/spire/server/datastore"
 	"github.com/spiffe/spire/test/spiretest"
 	"github.com/stretchr/testify/require"
-	"github.com/summerwind/spire-plugin-datastore-kubernetes/pkg/apis/v1alpha1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/summerwind/spire-plugin-datastore-k8s/pkg/apis/v1alpha1"
 )
 
 var (

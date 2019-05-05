@@ -5,7 +5,7 @@
 package apis
 
 import (
-	"github.com/summerwind/spire-plugin-datastore-kubernetes/pkg/apis/v1alpha1"
+	"github.com/summerwind/spire-plugin-datastore-k8s/pkg/apis/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
