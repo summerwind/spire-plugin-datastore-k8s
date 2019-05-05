@@ -2,16 +2,19 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"path"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/spiffe/spire/pkg/common/bundleutil"
 	"github.com/spiffe/spire/pkg/common/util"
 	"github.com/spiffe/spire/proto/spire/common"
 	spi "github.com/spiffe/spire/proto/spire/common/plugin"
@@ -27,6 +30,12 @@ import (
 var (
 	ctx       = context.Background()
 	namespace = "default"
+
+	svidPath    = "test/fixture/certs/svid.pem"
+	svidKeyPath = "test/fixture/certs/svid_key.pem"
+	caPath      = "test/fixture/certs/ca.pem"
+	caKeyPath   = "test/fixture/certs/ca_key.pem"
+	bundlePath  = "test/fixture/certs/bundle.der"
 )
 
 func TestPlugin(t *testing.T) {
@@ -35,6 +44,7 @@ func TestPlugin(t *testing.T) {
 
 type PluginSuite struct {
 	spiretest.Suite
+	cert   *x509.Certificate
 	env    *envtest.Environment
 	config *rest.Config
 	plugin *Plugin
@@ -43,15 +53,16 @@ type PluginSuite struct {
 func (s *PluginSuite) SetupSuite() {
 	var err error
 
+	s.cert, _, err = loadSVIDFixture()
+	s.Require().NoError(err)
+
 	s.env = &envtest.Environment{
 		CRDDirectoryPaths:        []string{filepath.Join("manifests", "crds")},
 		ControlPlaneStartTimeout: 60 * time.Second,
 	}
 
 	kubeConfig, err = s.env.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
+	s.Require().NoError(err)
 }
 
 func (s *PluginSuite) TearDownSuite() {
@@ -72,6 +83,15 @@ func (s *PluginSuite) SetupTest() {
 func (s *PluginSuite) TearDownTest() {
 	var err error
 
+	bundleList := v1alpha1.BundleList{}
+	err = s.plugin.List(ctx, &bundleList, client.InNamespace(namespace))
+	s.Require().NoError(err)
+
+	for _, bundle := range bundleList.Items {
+		err = s.plugin.Delete(ctx, &bundle)
+		s.Require().NoError(err)
+	}
+
 	entryList := v1alpha1.RegistrationEntryList{}
 	err = s.plugin.List(ctx, &entryList, client.InNamespace(namespace))
 	s.Require().NoError(err)
@@ -89,6 +109,125 @@ func (s *PluginSuite) TearDownTest() {
 		err = s.plugin.Delete(ctx, &node)
 		s.Require().NoError(err)
 	}
+}
+
+func (s *PluginSuite) TestDeleteBundleRestrictedByRegistrationEntries() {
+	var err error
+
+	// Create a bundle
+	_, err = s.plugin.CreateBundle(ctx, &datastore.CreateBundleRequest{
+		Bundle: bundleutil.BundleProtoFromRootCA("spiffe://otherdomain.org", s.cert),
+	})
+	s.Require().NoError(err)
+
+	// Create an associated entry
+	_, err = s.plugin.CreateRegistrationEntry(ctx, &datastore.CreateRegistrationEntryRequest{
+		Entry: &common.RegistrationEntry{
+			Selectors: []*common.Selector{
+				{Type: "Type1", Value: "Value1"},
+			},
+			SpiffeId:      "spiffe://example.org/foo",
+			FederatesWith: []string{"spiffe://otherdomain.org"},
+		},
+	})
+	s.Require().NoError(err)
+
+	// Delete the bundle in RESTRICTED mode.
+	_, err = s.plugin.DeleteBundle(context.Background(), &datastore.DeleteBundleRequest{
+		TrustDomainId: "spiffe://otherdomain.org",
+	})
+	s.RequireErrorContains(err, "cannot delete bundle; federated with 1 registration entries")
+}
+
+func (s *PluginSuite) TestDeleteBundleDeleteRegistrationEntries() {
+	var err error
+
+	// Create a bundle
+	_, err = s.plugin.CreateBundle(ctx, &datastore.CreateBundleRequest{
+		Bundle: bundleutil.BundleProtoFromRootCA("spiffe://otherdomain.org", s.cert),
+	})
+	s.Require().NoError(err)
+
+	// Create an associated entry
+	entry, err := s.plugin.CreateRegistrationEntry(ctx, &datastore.CreateRegistrationEntryRequest{
+		Entry: &common.RegistrationEntry{
+			Selectors: []*common.Selector{
+				{Type: "Type1", Value: "Value1"},
+			},
+			SpiffeId:      "spiffe://example.org/foo",
+			FederatesWith: []string{"spiffe://otherdomain.org"},
+		},
+	})
+	s.Require().NoError(err)
+
+	// Create an unrelated registration entry to make sure the delete
+	// operation only deletes associated registration entries.
+	unrelated, err := s.plugin.CreateRegistrationEntry(ctx, &datastore.CreateRegistrationEntryRequest{
+		Entry: &common.RegistrationEntry{
+			Selectors: []*common.Selector{
+				{Type: "Type2", Value: "Value2"},
+			},
+			SpiffeId: "spiffe://example.org/foo",
+		},
+	})
+	s.Require().NoError(err)
+
+	// delete the bundle in DELETE mode
+	_, err = s.plugin.DeleteBundle(context.Background(), &datastore.DeleteBundleRequest{
+		TrustDomainId: "spiffe://otherdomain.org",
+		Mode:          datastore.DeleteBundleRequest_DELETE,
+	})
+	s.Require().NoError(err)
+
+	// verify that the registeration entry has been deleted
+	res, err := s.plugin.FetchRegistrationEntry(context.Background(), &datastore.FetchRegistrationEntryRequest{
+		EntryId: entry.Entry.EntryId,
+	})
+	s.Require().NoError(err)
+	s.Require().Nil(res.Entry)
+
+	// make sure the unrelated entry still exists
+	res, err = s.plugin.FetchRegistrationEntry(ctx, &datastore.FetchRegistrationEntryRequest{
+		EntryId: unrelated.Entry.EntryId,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(res.Entry)
+}
+
+func (s *PluginSuite) TestDeleteBundleDissociateRegistrationEntries() {
+	var err error
+
+	// Create a bundle
+	_, err = s.plugin.CreateBundle(ctx, &datastore.CreateBundleRequest{
+		Bundle: bundleutil.BundleProtoFromRootCA("spiffe://otherdomain.org", s.cert),
+	})
+	s.Require().NoError(err)
+
+	// Create an associated entry
+	entry, err := s.plugin.CreateRegistrationEntry(ctx, &datastore.CreateRegistrationEntryRequest{
+		Entry: &common.RegistrationEntry{
+			Selectors: []*common.Selector{
+				{Type: "Type1", Value: "Value1"},
+			},
+			SpiffeId:      "spiffe://example.org/foo",
+			FederatesWith: []string{"spiffe://otherdomain.org"},
+		},
+	})
+	s.Require().NoError(err)
+
+	// delete the bundle in DISSOCIATE mode
+	_, err = s.plugin.DeleteBundle(context.Background(), &datastore.DeleteBundleRequest{
+		TrustDomainId: "spiffe://otherdomain.org",
+		Mode:          datastore.DeleteBundleRequest_DISSOCIATE,
+	})
+	s.Require().NoError(err)
+
+	// make sure the entry still exists, albeit without an associated bundle
+	res, err := s.plugin.FetchRegistrationEntry(ctx, &datastore.FetchRegistrationEntryRequest{
+		EntryId: entry.Entry.EntryId,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(res.Entry)
 }
 
 func (s *PluginSuite) TestFetchAttestedNodesWithPagination() {
@@ -603,6 +742,62 @@ func (s *PluginSuite) TestListMatchingEntries() {
 			s.RequireProtoListEqual(test.expectedList, result.Entries)
 		})
 	}
+}
+
+func LoadPEM(path string) (*pem.Block, error) {
+	dat, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	blk, rest := pem.Decode(dat)
+	if len(rest) > 0 {
+		return nil, fmt.Errorf("error decoding certificate at %s", path)
+	}
+
+	return blk, nil
+}
+
+func LoadCert(path string) (*x509.Certificate, error) {
+	block, err := LoadPEM(path)
+	if err != nil {
+		return nil, err
+	}
+
+	crt, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return crt, nil
+}
+
+func LoadKey(path string) (*ecdsa.PrivateKey, error) {
+	block, err := LoadPEM(path)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
+}
+
+func loadCertAndKey(crtPath, keyPath string) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+	crt, err := LoadCert(crtPath)
+	if err != nil {
+		return crt, nil, err
+	}
+
+	key, err := LoadKey(keyPath)
+	return crt, key, err
+}
+
+func loadSVIDFixture() (svid *x509.Certificate, key *ecdsa.PrivateKey, err error) {
+	return loadCertAndKey(svidPath, svidKeyPath)
 }
 
 func getRegistrationEntries(fileName string) []*common.RegistrationEntry {

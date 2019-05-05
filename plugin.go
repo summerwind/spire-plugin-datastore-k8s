@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/hashicorp/hcl"
@@ -202,7 +201,28 @@ func (p *Plugin) DeleteBundle(ctx context.Context, req *datastore.DeleteBundleRe
 		return nil, err
 	}
 
-	// TODO: Process mode value
+	labels := v1alpha1.GetFederationLabels([]string{instance.Spec.TrustDomainID})
+	entryList := v1alpha1.RegistrationEntryList{}
+	err = p.List(ctx, &entryList, client.InNamespace(p.config.Namespace), client.MatchingLabels(labels))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(entryList.Items) > 0 {
+		switch req.Mode {
+		case datastore.DeleteBundleRequest_DELETE:
+			for _, re := range entryList.Items {
+				err = p.Delete(ctx, &re)
+				if err != nil {
+					return nil, err
+				}
+			}
+		case datastore.DeleteBundleRequest_DISSOCIATE:
+			// Nothing to do.
+		default:
+			return nil, fmt.Errorf("cannot delete bundle; federated with %d registration entries", len(entryList.Items))
+		}
+	}
 
 	err = p.Delete(ctx, &instance)
 	if err != nil {
@@ -328,7 +348,6 @@ func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttes
 		}
 	}
 
-	log.Printf("Start: %d, Nodes: %v", start, nodes)
 	if page != nil && page.PageSize > 0 {
 		if page.Token != "" && start == 0 {
 			return nil, errors.New("invalid token")
@@ -345,7 +364,6 @@ func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttes
 			page.Token = nodes[length-1].Name
 		}
 	}
-	log.Printf("Nodes: %v", nodes)
 
 	res := datastore.ListAttestedNodesResponse{
 		Nodes:      make([]*common.AttestedNode, 0, len(nodes)),
