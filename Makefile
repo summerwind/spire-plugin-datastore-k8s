@@ -1,10 +1,11 @@
-build:
+build: generate test
 	go build .
 
-.PHONY: test
 test:
 	go vet ./...
 	go test -v ./...
 
 generate:
 	go generate ./pkg/...
+
+.PHONY: test
