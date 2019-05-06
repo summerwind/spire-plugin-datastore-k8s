@@ -33,11 +33,23 @@ plugins {
   DataStore "k8s" {
     plugin_cmd = "/path/to/plugin"
     plugin_data {
-      namespace = "default"
+      namespace = "spire"
     }
   }
 }
 ```
+
+## Deploying to Kubernetes
+
+You must create *CustomResourceDefinition (CRD)* resources in your Kubernetes cluster before you deploy the plugin. Create CRDs as follows:
+
+```
+$ curl -L https://github.com/summerwind/spire-plugin-datastore-k8s/releases/latest/download/crd.yaml | kubectl apply -f -
+```
+
+In addition, the Pod of the SPIRE server must have permissions to manage the resources of the CRDs you created. See example manifest below for more information about permissions.
+
+- [spire-server.yaml](manifests/examples/spire-server.yaml)
 
 ## Build from soruce
 
