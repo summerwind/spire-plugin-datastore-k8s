@@ -58,8 +58,8 @@ To build a binary from source, first build the container image and get the binar
 ```
 $ git clone https://github.com/summerwind/spire-plugin-datastore-k8s
 $ cd spire-plugin-datastore-k8s
-$ make build-container
-$ docker create -n spire summerwind/spire:latest
+$ docker build --target release -t plugin:latest .
+$ docker create -n spire plugin:latest
 $ docker cp spire:/opt/spire/bin/spire-plugin-datastore-k8s ./
 $ docker rm spire
 ```
