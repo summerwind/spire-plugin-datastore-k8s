@@ -1,0 +1,6 @@
+resources:
+- bundle.yaml
+- attested_node.yaml
+- registration_entry.yaml
+- node_selectors.yaml
+- join_token.yaml

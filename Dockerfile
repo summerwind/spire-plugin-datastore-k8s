@@ -33,3 +33,18 @@ RUN go build .
 FROM gcr.io/spiffe-io/spire-server:0.7.3
 
 COPY --from=builder /go/src/github.com/summerwind/spire-plugin-datastore-k8s/spire-plugin-datastore-k8s /opt/spire/bin/spire-plugin-datastore-k8s
+
+###################
+
+FROM golang:1.12 AS release
+
+ENV GO111MODULE=on \
+    GOPROXY=https://proxy.golang.org
+
+WORKDIR /go/src/github.com/summerwind/spire-plugin-datastore-k8s
+COPY go.mod go.sum .
+RUN go mod download
+
+COPY . .
+
+RUN go build .
