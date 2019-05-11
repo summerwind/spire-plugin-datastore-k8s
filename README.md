@@ -13,7 +13,7 @@ Download latest binary and install it to the plugin directory.
 
 ```
 $ curl -L -O https://github.com/summerwind/spire-plugin-datastore-k8s/releases/latest/download/spire-plugin-datastore-k8s-linux-amd64.tar.gz
-$ tar zxvf spire-plugin-datastore-k8s.tar.gz
+$ tar zxvf spire-plugin-datastore-k8s-linux-amd64.tar.gz
 $ mv spire-plugin-datastore-k8s /path/to/plugin
 ```
 
